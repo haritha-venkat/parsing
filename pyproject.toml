@@ -1,0 +1,52 @@
+[project]
+name = "rag-project"
+version = "0.1.0"
+description = "A RAG pipeline for loading documents, storing embeddings in ChromaDB, and retrieving relevant chunks."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb>=0.5.0",
+    "docx2txt>=0.8",
+    "langchain>=0.3.0",
+    "langchain-chroma>=0.1.0",
+    "langchain-community>=0.3.0",
+    "langchain-huggingface>=0.1.0",
+    "marker-pdf>=1.0.0",
+    "pandas>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "sentence-transformers>=3.0.0",
+    "tqdm>=4.66.0",
+    "unstructured>=0.14.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
+]
+
+[project.scripts]
+rag = "main:main"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+]
+ignore = [
+    "E501",
+]

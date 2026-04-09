@@ -69,7 +69,7 @@ class Reranker:
         pairs = [(query, doc.page_content) for doc in documents]
         scores: list[float] = self.model.predict(pairs).tolist()
 
-        for doc, score in zip(documents, scores):
+        for doc, score in zip(documents, scores, strict=False):
             doc.metadata["rerank_score"] = round(float(score), 6)
 
         ranked = sorted(

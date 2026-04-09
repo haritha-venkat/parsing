@@ -32,11 +32,12 @@ rag_project/
 ##  Setup
 
 ```bash
-# 1. Create virtual environment
+# 1. Create virtual environment and install dependencies with uv
+uv sync
+
+# Optional fallback if uv is not available
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# 2. Install dependencies
 pip install -r requirements.txt
 ```
 
