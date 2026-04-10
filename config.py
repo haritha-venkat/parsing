@@ -5,7 +5,12 @@ Central configuration for the RAG project.
 All paths, model names, and tunable parameters live here.
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Project root & directories ─────────────────────────────────────────────────
 BASE_DIR: Path = Path(__file__).resolve().parent
@@ -41,6 +46,12 @@ FINAL_K: int = 3
 
 # ── Re-ranking ─────────────────────────────────────────────────────────────────
 RERANK_MODEL_NAME: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+# Groq LLM
+GROQ_API_KEY: str | None = os.getenv("GROQ_API_KEY")
+GROQ_BASE_URL: str = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_MODEL_NAME: str = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
+LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
 # ── Supported file types ───────────────────────────────────────────────────────
 SUPPORTED_EXTENSIONS: tuple = (".pdf", ".csv", ".txt", ".docx")

@@ -1,8 +1,5 @@
 """
-src/qa/qa_engine.py
-────────────────────
-Q&A engine: retrieves relevant chunks and saves every
-question + answer to a dated JSON file.
+Q&A engine backed by a LangGraph RAG workflow.
 """
 
 import datetime
@@ -12,6 +9,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 
 import config
+from src.graph.rag_graph import RAGGraph, RAGState
 from src.logger.log_setup import LoggerFactory
 from src.retriever.retriever import Retriever
 
@@ -22,10 +20,6 @@ class QAEngine:
     """
     Ask questions against indexed documents.
     Every Q&A pair is persisted to a dated JSON file in qa_history/.
-
-    Args:
-        retriever       : Initialised Retriever instance.
-        history_dir     : Directory to save JSON history files.
     """
 
     def __init__(
@@ -36,81 +30,72 @@ class QAEngine:
         self.retriever = retriever
         self.history_dir = history_dir
         self._history_file = history_dir / f"qa_{datetime.date.today()}.json"
+        self.graph = RAGGraph(retriever=retriever)
 
-    # ── Public API ─────────────────────────────────────────────────────────────
-
-    def ask(self, query: str, verbose: bool = True) -> list[Document]:
+    def ask(self, query: str, verbose: bool = True) -> RAGState:
         """
-        Ask a question and retrieve relevant document chunks.
-
-        Args:
-            query   : User's natural language question.
-            verbose : Print formatted results to stdout.
+        Ask a question using the LangGraph RAG pipeline.
 
         Returns:
-            List[Document]: Retrieved (and re-ranked) documents.
+            RAGState containing the query, retrieved documents, and Grok answer.
         """
         logger.info("Question: %s", query)
 
-        results = self.retriever.retrieve(query)
+        state = self.graph.invoke(query)
+        results = state["documents"]
 
         if not results:
             logger.warning("No results found for query: '%s'", query)
-            print("\n⚠️  No results found. Make sure documents are indexed first.\n")
-            return []
+            print("\n[WARN] No results found. Make sure documents are indexed first.\n")
+            return state
 
-        self._save_to_history(query, results)
+        self._save_to_history(query, state["answer"], results)
 
         if verbose:
-            self._print_results(query, results)
+            self._print_results(query, state["answer"], results)
 
-        return results
+        return state
 
     def load_history(self) -> list[dict]:
-        """
-        Load today's Q&A history from JSON.
-
-        Returns:
-            List of Q&A records for today.
-        """
+        """Load today's Q&A history from JSON."""
         if not self._history_file.exists():
             return []
         with open(self._history_file, encoding="utf-8") as fh:
             return json.load(fh)
 
     def print_history(self, last_n: int | None = None) -> None:
-        """
-        Print Q&A history to stdout.
-
-        Args:
-            last_n: Show only the last N entries (None = all).
-        """
+        """Print Q&A history to stdout."""
         history = self.load_history()
         if not history:
             print("No Q&A history found for today.")
             return
 
         entries = history[-last_n:] if last_n else history
-        print(f"\n📜 Q&A History ({len(entries)} of {len(history)} entries)\n")
+        print(f"\nQ&A History ({len(entries)} of {len(history)} entries)\n")
 
         for i, record in enumerate(entries, 1):
             print(f"[{i}] {record['timestamp']}")
-            print(f"    ❓  {record['question']}")
+            print(f"    Question: {record['question']}")
+            print(f"    Answer: {record.get('answer', 'N/A')}")
             for ans in record["answers"]:
                 score = ans.get("rerank_score", "N/A")
                 print(
-                    f"    📄  #{ans['rank']} | {ans['source']} "
+                    f"    Source #{ans['rank']} | {ans['source']} "
                     f"(pg {ans['page']}) | score: {score}"
                 )
             print()
 
-    # ── Internal helpers ───────────────────────────────────────────────────────
-
-    def _save_to_history(self, query: str, results: list[Document]) -> None:
+    def _save_to_history(
+        self,
+        query: str,
+        answer: str,
+        results: list[Document],
+    ) -> None:
         """Append a Q&A record to today's JSON history file."""
         record = {
             "timestamp": datetime.datetime.now().isoformat(),
             "question": query,
+            "answer": answer,
             "answers": [
                 {
                     "rank": i + 1,
@@ -131,24 +116,29 @@ class QAEngine:
             json.dump(history, fh, indent=2, ensure_ascii=False)
 
         logger.info(
-            "Q&A saved to history (total today: %d) → %s",
+            "Q&A saved to history (total today: %d) -> %s",
             len(history),
             self._history_file.name,
         )
 
     @staticmethod
-    def _print_results(query: str, results: list[Document]) -> None:
-        """Pretty-print retrieval results."""
+    def _print_results(query: str, answer: str, results: list[Document]) -> None:
+        """Pretty-print generated answer and source chunks."""
         sep = "=" * 65
         print(f"\n{sep}")
-        print(f"❓  {query}")
+        print(f"Question: {query}")
         print(sep)
+        print("\nAnswer")
+        print("-" * 65)
+        print(answer)
+        print("\nSources")
+
         for i, doc in enumerate(results, 1):
             score = doc.metadata.get("rerank_score", "N/A")
             source = doc.metadata.get("source", "unknown")
             page = doc.metadata.get("page", "?")
-            print(f"\n📄  Result #{i}  |  {source}  (pg {page})  |  score: {score}")
-            print("─" * 65)
+            print(f"\nResult #{i} | {source} (pg {page}) | score: {score}")
+            print("-" * 65)
             snippet = doc.page_content[:600]
             if len(doc.page_content) > 600:
                 snippet += "..."

@@ -10,20 +10,22 @@
 rag_project/
 ├── main.py                        ← CLI entry point
 ├── config.py                      ← All settings & paths
-├── requirements.txt
+├── pyproject.toml                 ← Project metadata & uv dependencies
+├── uv.lock                        ← Locked dependency versions
 ├── README.md
 ├── data/                          ← Drop your files here
 ├── chroma_db/                     ← Persistent vector store (auto-created)
 ├── logs/                          ← Daily log files  (auto-created)
 ├── qa_history/                    ← Q&A JSON history (auto-created)
 └── src/
-    ├── logger/log_setup.py        ← LoggerFactory
     ├── loader/document_loader.py  ← PDF (Marker) / CSV / TXT / DOCX
+    ├── logger/log_setup.py        ← LoggerFactory
     ├── chunker/text_chunker.py    ← RecursiveCharacterTextSplitter
     ├── embedder/embedder.py       ← HuggingFace sentence-transformers
     ├── vectorstore/chroma_store.py← ChromaDB (persistent)
     ├── reranker/reranker.py       ← CrossEncoder re-ranker
     ├── retriever/retriever.py     ← Vector search → re-rank pipeline
+    ├── graph/rag_graph.py         ← LangGraph RAG workflow
     └── qa/qa_engine.py            ← Ask questions, save history
 ```
 
@@ -32,13 +34,17 @@ rag_project/
 ##  Setup
 
 ```bash
-# 1. Create virtual environment and install dependencies with uv
+# Install dependencies with uv
 uv sync
+```
 
-# Optional fallback if uv is not available
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+Create a local `.env` file for Groq:
+
+```bash
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+GROQ_MODEL_NAME=llama-3.3-70b-versatile
+LLM_TEMPERATURE=0.2
 ```
 
 ---
