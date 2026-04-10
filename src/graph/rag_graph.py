@@ -23,13 +23,16 @@ class RAGState(TypedDict):
     query: str
     documents: list[Document]
     answer: str
+    query_type: str
+    top_score: float | None
 
 
 class RAGGraph:
     """
     LangGraph pipeline:
       1. retrieve relevant chunks from ChromaDB
-      2. generate a final answer using Groq
+      2. classify whether the query belongs to indexed documents
+      3. answer with document context or as a general Groq question
     """
 
     def __init__(self, retriever: Retriever) -> None:
@@ -61,17 +64,30 @@ class RAGGraph:
             "query": query,
             "documents": [],
             "answer": "",
+            "query_type": "",
+            "top_score": None,
         }
         return self.graph.invoke(initial_state)
 
     def _build_graph(self):
         workflow = StateGraph(RAGState)
         workflow.add_node("retrieve", self._retrieve)
-        workflow.add_node("generate_answer", self._generate_answer)
+        workflow.add_node("classify_query", self._classify_query)
+        workflow.add_node("generate_document_answer", self._generate_document_answer)
+        workflow.add_node("generate_general_answer", self._generate_general_answer)
 
         workflow.add_edge(START, "retrieve")
-        workflow.add_edge("retrieve", "generate_answer")
-        workflow.add_edge("generate_answer", END)
+        workflow.add_edge("retrieve", "classify_query")
+        workflow.add_conditional_edges(
+            "classify_query",
+            self._route_after_classification,
+            {
+                "document": "generate_document_answer",
+                "general": "generate_general_answer",
+            },
+        )
+        workflow.add_edge("generate_document_answer", END)
+        workflow.add_edge("generate_general_answer", END)
 
         return workflow.compile()
 
@@ -80,7 +96,37 @@ class RAGGraph:
         logger.info("LangGraph retrieve node returned %d document(s)", len(documents))
         return {"documents": documents}
 
-    def _generate_answer(self, state: RAGState) -> dict:
+    def _classify_query(self, state: RAGState) -> dict:
+        documents = state["documents"]
+        if not documents:
+            logger.info("Query classified as general because no documents were found.")
+            return {"query_type": "general", "top_score": None}
+
+        top_score = documents[0].metadata.get("rerank_score")
+        if top_score is None:
+            logger.info(
+                "Query classified as document because documents were retrieved."
+            )
+            return {"query_type": "document", "top_score": None}
+
+        query_type = (
+            "document"
+            if float(top_score) >= config.DOC_RELEVANCE_THRESHOLD
+            else "general"
+        )
+        logger.info(
+            "Query classified as %s (top_score=%s, threshold=%s)",
+            query_type,
+            top_score,
+            config.DOC_RELEVANCE_THRESHOLD,
+        )
+        return {"query_type": query_type, "top_score": float(top_score)}
+
+    @staticmethod
+    def _route_after_classification(state: RAGState) -> str:
+        return state["query_type"]
+
+    def _generate_document_answer(self, state: RAGState) -> dict:
         documents = state["documents"]
         if not documents:
             return {
@@ -105,10 +151,30 @@ class RAGGraph:
             ),
         ]
 
+        return self._invoke_llm(messages, mode="document")
+
+    def _generate_general_answer(self, state: RAGState) -> dict:
+        messages = [
+            SystemMessage(
+                content=(
+                    "You are a helpful general assistant. Answer directly and "
+                    "concisely. Do not claim that the answer came from indexed "
+                    "documents."
+                )
+            ),
+            HumanMessage(content=state["query"]),
+        ]
+        return self._invoke_llm(messages, mode="general")
+
+    def _invoke_llm(
+        self,
+        messages: list[SystemMessage | HumanMessage],
+        mode: str,
+    ) -> dict:
         try:
             response = self.llm.invoke(messages)
             answer = str(response.content).strip()
-            logger.info("LangGraph generate_answer node completed.")
+            logger.info("LangGraph %s answer node completed.", mode)
             return {"answer": answer}
         except RateLimitError as exc:
             logger.error(
@@ -116,7 +182,7 @@ class RAGGraph:
             )
             return {
                 "answer": (
-                    "The retrieval step worked, but Groq could not generate an "
+                    f"The {mode} route worked, but Groq could not generate an "
                     "answer because the API account has exhausted credits or reached "
                     f"its spending limit. Provider message: {exc}"
                 )
@@ -125,7 +191,7 @@ class RAGGraph:
             logger.error("Groq request failed: %s", exc)
             return {
                 "answer": (
-                    "The retrieval step worked, but Groq could not generate an "
+                    f"The {mode} route worked, but Groq could not generate an "
                     f"answer because the API request failed. Provider message: {exc}"
                 )
             }

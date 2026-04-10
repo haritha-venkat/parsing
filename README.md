@@ -45,7 +45,17 @@ GROQ_API_KEY=your_groq_api_key_here
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_MODEL_NAME=llama-3.3-70b-versatile
 LLM_TEMPERATURE=0.2
+DOC_RELEVANCE_THRESHOLD=-11.0
 ```
+
+The LangGraph workflow routes each question before generation:
+
+```
+retrieve → classify_query → document answer OR general Groq answer
+```
+
+If the retrieved document score is strong enough, Groq receives the document context.
+If not, Groq answers as a general LLM without sending document chunks.
 
 ---
 

@@ -43,6 +43,7 @@ CHUNK_OVERLAP: int = 100
 # ── Retrieval ──────────────────────────────────────────────────────────────────
 INITIAL_K: int = 10
 FINAL_K: int = 3
+DOC_RELEVANCE_THRESHOLD: float = float(os.getenv("DOC_RELEVANCE_THRESHOLD", "-11.0"))
 
 # ── Re-ranking ─────────────────────────────────────────────────────────────────
 RERANK_MODEL_NAME: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"

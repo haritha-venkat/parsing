@@ -37,22 +37,34 @@ class QAEngine:
         Ask a question using the LangGraph RAG pipeline.
 
         Returns:
-            RAGState containing the query, retrieved documents, and Grok answer.
+            RAGState containing the query, route, retrieved documents, and Groq answer.
         """
         logger.info("Question: %s", query)
 
         state = self.graph.invoke(query)
         results = state["documents"]
 
-        if not results:
+        if state["query_type"] == "document" and not results:
             logger.warning("No results found for query: '%s'", query)
             print("\n[WARN] No results found. Make sure documents are indexed first.\n")
             return state
 
-        self._save_to_history(query, state["answer"], results)
+        self._save_to_history(
+            query=query,
+            answer=state["answer"],
+            query_type=state["query_type"],
+            top_score=state["top_score"],
+            results=results if state["query_type"] == "document" else [],
+        )
 
         if verbose:
-            self._print_results(query, state["answer"], results)
+            self._print_results(
+                query=query,
+                answer=state["answer"],
+                query_type=state["query_type"],
+                top_score=state["top_score"],
+                results=results if state["query_type"] == "document" else [],
+            )
 
         return state
 
@@ -76,6 +88,7 @@ class QAEngine:
         for i, record in enumerate(entries, 1):
             print(f"[{i}] {record['timestamp']}")
             print(f"    Question: {record['question']}")
+            print(f"    Route: {record.get('query_type', 'document')}")
             print(f"    Answer: {record.get('answer', 'N/A')}")
             for ans in record["answers"]:
                 score = ans.get("rerank_score", "N/A")
@@ -89,6 +102,8 @@ class QAEngine:
         self,
         query: str,
         answer: str,
+        query_type: str,
+        top_score: float | None,
         results: list[Document],
     ) -> None:
         """Append a Q&A record to today's JSON history file."""
@@ -96,6 +111,8 @@ class QAEngine:
             "timestamp": datetime.datetime.now().isoformat(),
             "question": query,
             "answer": answer,
+            "query_type": query_type,
+            "top_score": top_score,
             "answers": [
                 {
                     "rank": i + 1,
@@ -122,15 +139,27 @@ class QAEngine:
         )
 
     @staticmethod
-    def _print_results(query: str, answer: str, results: list[Document]) -> None:
+    def _print_results(
+        query: str,
+        answer: str,
+        query_type: str,
+        top_score: float | None,
+        results: list[Document],
+    ) -> None:
         """Pretty-print generated answer and source chunks."""
         sep = "=" * 65
         print(f"\n{sep}")
         print(f"Question: {query}")
+        print(f"Route: {query_type} | top_score: {top_score}")
         print(sep)
         print("\nAnswer")
         print("-" * 65)
         print(answer)
+        if not results:
+            print("\nSources: not used for general-answer route")
+            print(f"\n{sep}\n")
+            return
+
         print("\nSources")
 
         for i, doc in enumerate(results, 1):
