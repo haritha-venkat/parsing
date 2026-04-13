@@ -48,14 +48,20 @@ LLM_TEMPERATURE=0.2
 DOC_RELEVANCE_THRESHOLD=-11.0
 ```
 
-The LangGraph workflow routes each question before generation:
+The agentic RAG workflow routes each question before generation:
 
 ```
-retrieve → classify_query → document answer OR general Groq answer
+agent → decide whether to call a tool → document answer OR general Groq answer
 ```
 
-If the retrieved document score is strong enough, Groq receives the document context.
-If not, Groq answers as a general LLM without sending document chunks.
+Defined tools:
+
+1. `retrieve_documents(query)` → fetches relevant indexed chunks
+2. `get_collection_info()` → returns indexed collection metadata
+
+If the question is about uploaded documents, the agent calls `retrieve_documents`.
+If the question is about what is indexed, it can call `get_collection_info`.
+If the question is general, it answers directly without using tools.
 
 ---
 

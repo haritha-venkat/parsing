@@ -9,9 +9,10 @@ from pathlib import Path
 from langchain_core.documents import Document
 
 import config
-from src.graph.rag_graph import RAGGraph, RAGState
+from src.agentic.agentic_rag import AgenticRAG
 from src.logger.log_setup import LoggerFactory
 from src.retriever.retriever import Retriever
+from src.vectorstore.chroma_store import VectorStore
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -30,18 +31,21 @@ class QAEngine:
         self.retriever = retriever
         self.history_dir = history_dir
         self._history_file = history_dir / f"qa_{datetime.date.today()}.json"
-        self.graph = RAGGraph(retriever=retriever)
+        self.agentic_rag = AgenticRAG(
+            retriever=retriever,
+            vector_store=VectorStore(),
+        )
 
-    def ask(self, query: str, verbose: bool = True) -> RAGState:
+    def ask(self, query: str, verbose: bool = True) -> dict:
         """
-        Ask a question using the LangGraph RAG pipeline.
+        Ask a question using the agentic RAG pipeline.
 
         Returns:
-            RAGState containing the query, route, retrieved documents, and Groq answer.
+            dict containing the query, route, retrieved documents, and Groq answer.
         """
         logger.info("Question: %s", query)
 
-        state = self.graph.invoke(query)
+        state = self.agentic_rag.invoke(query)
         results = state["documents"]
 
         if state["query_type"] == "document" and not results:
