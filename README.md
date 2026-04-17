@@ -1,109 +1,94 @@
-# RAG Pipeline
+# Mining Capex RAG Pipeline
 
-> **Stack:** LangChain · Marker (PDF) · ChromaDB · SentenceTransformers · CrossEncoder
+> **Stack:** LangChain · PyMuPDF · ChromaDB · SentenceTransformers · CrossEncoder
+
+A Retrieval-Augmented Generation (RAG) pipeline for extracting, indexing, and querying capital expenditure (capex) data from mining company annual reports. Includes specialized scripts for table extraction and structured summaries.
 
 ---
 
-##  Project Structure
+## Project Structure
 
 ```
 rag_project/
-├── main.py                        ← CLI entry point
+├── main.py                        ← CLI entry point for RAG Q&A
+├── capex_table_extractor.py       ← Extract capex tables or text from PDFs
+├── capex_summary.py               ← Generate structured capex summaries
 ├── config.py                      ← All settings & paths
-├── pyproject.toml                 ← Project metadata & uv dependencies
-├── uv.lock                        ← Locked dependency versions
+├── pyproject.toml                 ← Project dependencies & scripts
 ├── README.md
-├── data/                          ← Drop your files here
+├── data/                          ← PDF files (e.g., annual reports)
 ├── chroma_db/                     ← Persistent vector store (auto-created)
-├── logs/                          ← Daily log files  (auto-created)
-├── qa_history/                    ← Q&A JSON history (auto-created)
+├── logs/                          ← Daily log files (auto-created)
+├── capex_tables.xlsx              ← Extracted tables (auto-generated)
+├── {Company}_capex.txt            ← Fallback text for PDFs without tables
 └── src/
-    ├── loader/document_loader.py  ← PDF (Marker) / CSV / TXT / DOCX
+    ├── __init__.py
     ├── logger/log_setup.py        ← LoggerFactory
+    ├── loader/capex_loader.py      ← PDF loader for capex documents
     ├── chunker/text_chunker.py    ← RecursiveCharacterTextSplitter
     ├── embedder/embedder.py       ← HuggingFace sentence-transformers
     ├── vectorstore/chroma_store.py← ChromaDB (persistent)
     ├── reranker/reranker.py       ← CrossEncoder re-ranker
     ├── retriever/retriever.py     ← Vector search → re-rank pipeline
-    ├── graph/rag_graph.py         ← LangGraph RAG workflow
-    └── qa/qa_engine.py            ← Ask questions, save history
+    ├── qa/qa_engine.py            ← Ask questions, save history
+    ├── agentic/
+    │   ├── __init__.py
+    │   └── agentic_rag.py         ← Advanced agentic RAG
+    └── graph/
+        ├── __init__.py
+        └── rag_graph.py           ← LangGraph-based RAG workflow
 ```
 
----
-
-##  Setup
-
+### Extract Capex Data from PDFs
 ```bash
-# Install dependencies with uv
-uv sync
+python capex_table_extractor.py
 ```
+- Extracts structured tables to `capex_tables.xlsx` for companies with tables.
+- For PDFs without tables, extracts relevant $ amount lines to `{Company}_capex.txt`.
 
-Create a local `.env` file for Groq:
-
+### Generate Capex Summaries
 ```bash
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_BASE_URL=https://api.groq.com/openai/v1
-GROQ_MODEL_NAME=llama-3.3-70b-versatile
-LLM_TEMPERATURE=0.2
-DOC_RELEVANCE_THRESHOLD=-11.0
+python capex_summary.py
 ```
+- Creates structured Excel summaries with total, sustaining, growth, and development capex figures.
 
-The agentic RAG workflow routes each question before generation:
-
-```
-agent → decide whether to call a tool → document answer OR general Groq answer
-```
-
-Defined tools:
-
-1. `retrieve_documents(query)` → fetches relevant indexed chunks
-2. `get_collection_info()` → returns indexed collection metadata
-
-If the question is about uploaded documents, the agent calls `retrieve_documents`.
-If the question is about what is indexed, it can call `get_collection_info`.
-If the question is general, it answers directly without using tools.
-
----
-
-##  Usage
-
-### Index files
+### Index Documents for RAG
 ```bash
-python main.py index --files data/report.pdf data/data.csv data/notes.txt
+python main.py index --files data/antofagasta-2022-ara.pdf data/Barrick_Annual_Report_2022.pdf
 ```
 
-### Ask a question
+### Ask a Question
 ```bash
-python main.py ask --query "What is the main finding?"
+python main.py ask --query "What was Antofagasta's total capital expenditure in 2022?"
 ```
 
-### Ask without re-ranking
+### Ask without Re-ranking
 ```bash
-python main.py ask --query "Summarise the key points" --no-rerank
+python main.py ask --query "Summarize capex trends" --no-rerank
 ```
 
-### View Q&A history
+### View Q&A History
 ```bash
 python main.py history
 python main.py history --last-n 5
 ```
 
-### Vector store info
+### Vector Store Info
 ```bash
 python main.py info
 ```
 
-### Clear the vector store
+### Clear the Vector Store
 ```bash
 python main.py clear
 ```
 
 ---
 
-##  Use as a Python API
+## Use as a Python API
 
 ```python
-from src.loader.document_loader import DocumentLoader
+from src.loader.capex_loader import load_capex_batch
 from src.chunker.text_chunker import TextChunker
 from src.vectorstore.chroma_store import VectorStore
 from src.reranker.reranker import Reranker
@@ -115,20 +100,19 @@ vector_store = VectorStore()
 retriever    = Retriever(vector_store, Reranker())
 engine       = QAEngine(retriever)
 
-# Index
-loader  = DocumentLoader()
+# Index capex PDFs
+docs    = load_capex_batch("data/")
 chunker = TextChunker()
-docs    = loader.load("data/report.pdf")
 chunks  = chunker.split(docs)
 vector_store.add_documents(chunks)
 
-# Ask
-engine.ask("What is this report about?")
+# Ask about capex
+engine.ask("What are the capex figures for Barrick Gold?")
 ```
 
 ---
 
-##  Config Tuning (`config.py`)
+## Config Tuning (`config.py`)
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -137,6 +121,21 @@ engine.ask("What is this report about?")
 | `INITIAL_K` | 10 | Candidates from ChromaDB |
 | `FINAL_K` | 3 | Results after re-ranking |
 | `EMBED_DEVICE` | `cpu` | Set to `cuda` for GPU |
+
+---
+
+## Dependencies
+
+Install with:
+```bash
+pip install -e .
+```
+Or using uv:
+```bash
+uv sync
+```
+
+Key packages: `langchain`, `chromadb`, `pymupdf`, `pandas`, `openpyxl`, `sentence-transformers`.
 
 ---
 

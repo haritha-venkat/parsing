@@ -17,10 +17,8 @@ BASE_DIR: Path = Path(__file__).resolve().parent
 DATA_DIR: Path = BASE_DIR / "data"
 CHROMA_DIR: Path = BASE_DIR / "chroma_db"
 LOG_DIR: Path = BASE_DIR / "logs"
-QA_HISTORY_DIR: Path = BASE_DIR / "qa_history"
-
 # Auto-create required directories
-for _dir in (DATA_DIR, CHROMA_DIR, LOG_DIR, QA_HISTORY_DIR):
+for _dir in (DATA_DIR, CHROMA_DIR, LOG_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
 # ── Logging ────────────────────────────────────────────────────────────────────
@@ -42,7 +40,7 @@ CHUNK_OVERLAP: int = 100
 
 # ── Retrieval ──────────────────────────────────────────────────────────────────
 INITIAL_K: int = 10
-FINAL_K: int = 3
+FINAL_K: int = 5
 DOC_RELEVANCE_THRESHOLD: float = float(os.getenv("DOC_RELEVANCE_THRESHOLD", "-11.0"))
 
 # ── Re-ranking ─────────────────────────────────────────────────────────────────
@@ -56,3 +54,12 @@ LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
 # ── Supported file types ───────────────────────────────────────────────────────
 SUPPORTED_EXTENSIONS: tuple = (".pdf", ".csv", ".txt", ".docx")
+
+# ── Mining PDF source directory ────────────────────────────────────────────────
+MINING_PDF_DIR: Path = Path(os.getenv("MINING_PDF_DIR", str(DATA_DIR)))
+
+
+# ── LangSmith ──────────────────────────────────────────────────────────────────
+LANGSMITH_API_KEY: str | None = os.getenv("LANGSMITH_API_KEY")
+LANGSMITH_TRACING: str = os.getenv("LANGSMITH_TRACING", "false")
+LANGSMITH_PROJECT: str = os.getenv("LANGSMITH_PROJECT", "rag-project")
